@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciamento - Douglas Emílio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0B0E14; color: #E0E0E0; }
+        .card { background-color: #151921; border-radius: 12px; padding: 24px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); }
+        input, select { background-color: #1F2937 !important; border: 1px solid #374151 !important; color: white !important; }
+        
+        .logo-container { 
+            width: 80px; height: 80px; border-radius: 12px; overflow: hidden; 
+            display: flex; align-items: center; justify-content: center; 
+            background: #1e293b; border: 2px solid #3b82f6; cursor: pointer;
+            position: relative;
+        }
+        .logo-container img { width: 100%; height: 100%; object-fit: contain; padding: 5px; }
+        
+        .recibo-header { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; margin-bottom: 20px; text-align: center; }
+        .recibo-logo { max-width: 150px; max-height: 80px; object-fit: contain; margin-bottom: 10px; }
+
+        @media print { .no-print { display: none !important; } #tela-recibo { display: block !important; width: 100% !important; margin: 0 !important; padding: 20px !important; } }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="login-screen" class="fixed inset-0 bg-[#0B0E14] z-[100] flex items-center justify-center p-4">
+        <div class="card w-full max-w-md border border-gray-800 text-center">
+            <h2 class="text-2xl font-black italic uppercase text-white mb-8">Acesso Restrito</h2>
+            <form id="login-form" class="space-y-4 text-left">
+                <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500">Usuário</label>
+                    <input type="text" id="user" class="w-full p-3 rounded-lg outline-none" value="admin">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500">Senha</label>
+                    <input type="password" id="pass" class="w-full p-3 rounded-lg outline-none" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl uppercase italic">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboard" class="max-w-7xl mx-auto space-y-8 no-print hidden">
+        <header class="flex flex-col md:flex-row justify-between items-center pb-4 border-b border-gray-700 gap-4">
+            <div class="flex items-center gap-4">
+                <div class="logo-container" onclick="document.getElementById('input-logo').click()">
+                    <img id="img-logo-dash" src="" class="hidden">
+                    <span id="txt-logo-dash" class="text-[10px] text-blue-500 font-bold text-center p-1">LOGOTIPO</span>
+                    <input type="file" id="input-logo" class="hidden" accept="image/*" onchange="uploadLogo(this)">
+                </div>
+                <div>
+                    <h1 class="text-3xl font-extrabold italic uppercase leading-none">GERENCIAMENTO</h1>
+                    <p class="text-sm text-gray-400">Douglas Emílio - Técnico de Informática</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="alterarSenha()" class="px-4 py-2 bg-gray-700 text-xs text-white rounded-md font-bold">ALTERAR SENHA</button>
+                <button onclick="location.reload()" class="px-4 py-2 bg-red-600 text-white rounded-md font-bold text-xs uppercase italic">Sair 🔒</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="card border-l-4 border-blue-600 text-center"><h2 class="text-xs font-bold text-gray-400 uppercase">Bruto Total</h2><p id="total-bruto" class="text-2xl font-black text-blue-500">R$ 0,00</p></div>
+            <div class="card border-l-4 border-green-600 text-center"><h2 class="text-xs font-bold text-gray-400 uppercase">Total Entrada</h2><p id="total-recebido" class="text-2xl font-black text-green-500">R$ 0,00</p></div>
+            <div class="card border-l-4 border-orange-500 text-center"><h2 class="text-xs font-bold text-gray-400 uppercase">Saldo Devedor</h2><p id="total-devedor" class="text-2xl font-black text-orange-500">R$ 0,00</p></div>
+            <div class="card border-l-4 border-red-600 text-center"><h2 class="text-xs font-bold text-gray-400 uppercase">Pendente (Qtd)</h2><p id="total-pendente" class="text-2xl font-black text-red-500">R$ 0,00</p></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="card"><h3 class="text-xs font-bold mb-4 uppercase text-gray-400">Visão de Recebimento</h3><canvas id="chartDonut" style="max-height: 200px;"></canvas></div>
+            <div class="card"><h3 class="text-xs font-bold mb-4 uppercase text-gray-400">Comparativo (6 Meses)</h3><canvas id="chartBar" style="max-height: 200px;"></canvas></div>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-4 items-center bg-[#151921] p-4 rounded-xl border border-gray-800">
+            <input type="text" id="busca" onkeyup="filtrar()" placeholder="Pesquisar cliente..." class="flex-grow p-3 rounded-xl outline-none">
+            <div class="flex gap-2 w-full md:w-auto">
+                <button onclick="abrirModal()" class="flex-grow px-6 py-3 bg-blue-600 text-white font-black rounded-xl uppercase italic">+ Novo Registro</button>
+                <button onclick="limparTudo()" class="px-6 py-3 bg-red-900/50 hover:bg-red-700 text-white font-black rounded-xl uppercase italic">Limpar Tudo</button>
+            </div>
+        </div>
+
+        <div id="lista-servicos" class="space-y-3"></div>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-black/95 hidden flex items-center justify-center p-4 z-50 no-print">
+        <div class="bg-[#151921] w-full max-w-2xl p-8 rounded-2xl border border-gray-700">
+            <h2 id="modal-titulo" class="text-2xl font-black mb-6 text-blue-500 uppercase italic">Novo Cadastro</h2>
+            <form id="form-cadastro" class="space-y-4">
+                <input type="hidden" id="edit-id">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="text" id="nome-cliente" placeholder="NOME DO CLIENTE" required class="p-3 rounded-lg w-full">
+                    <input type="text" id="doc-cliente" placeholder="CPF / CNPJ" class="p-3 rounded-lg w-full">
+                </div>
+                <input type="text" id="item-servico" placeholder="SERVIÇO REALIZADO" required class="p-3 rounded-lg w-full">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><label class="text-[10px]">TOTAL R$</label><input type="number" step="0.01" id="valor-total" oninput="calcularSaldoModal()" required class="w-full p-2 mt-1 rounded-lg"></div>
+                    <div><label class="text-[10px]">ENTRADA R$</label><input type="number" step="0.01" id="valor-entrada" oninput="calcularSaldoModal()" required class="w-full p-2 mt-1 rounded-lg text-green-400"></div>
+                    <div><label class="text-[10px]">SALDO DEVEDOR</label><input type="text" id="saldo-modal" readonly class="w-full p-2 mt-1 rounded-lg text-red-500 font-bold bg-gray-800" value="R$ 0,00"></div>
+                    <div>
+                        <label class="text-[10px]">PARCELAMENTO</label>
+                        <select id="parcelas" class="w-full p-2 mt-1 rounded-lg">
+                            <option value="1|0">À Vista</option>
+                            <option value="2|5">2x (5% Juros)</option>
+                            <option value="3|8">3x (8% Juros)</option>
+                            <option value="4|10">4x (10% Juros)</option>
+                            <option value="5|12">5x (12% Juros)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="fecharModal()" class="flex-1 py-3 bg-gray-800 rounded-xl">Cancelar</button>
+                    <button type="submit" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold">SALVAR E GERAR RECIBO</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="tela-recibo" class="hidden min-h-screen bg-white text-black p-10 max-w-2xl mx-auto border shadow-2xl">
+        <div class="recibo-header">
+            <img id="recibo-logo-img" src="" class="recibo-logo hidden">
+            <h1 class="text-4xl font-black italic text-blue-600">COMPROVANTE</h1>
+            <p class="text-gray-500 font-bold text-[10px] uppercase">Douglas Emílio - Suporte TI</p>
+        </div>
+        <div id="conteudo-recibo" class="space-y-4 text-sm mt-4"></div>
+        <div class="mt-12 flex gap-4 no-print">
+            <button onclick="voltarDash()" class="flex-1 py-3 bg-gray-200 rounded-xl font-bold uppercase">Voltar</button>
+            <button onclick="window.print()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold uppercase">Imprimir / PDF</button>
+        </div>
+    </div>
+
+    <script>
+        let servicos = JSON.parse(localStorage.getItem('douglas_v2')) || [];
+        let config = JSON.parse(localStorage.getItem('douglas_config')) || { pass: "Douglas283@" };
+        let logoBase64 = localStorage.getItem('douglas_logo') || "";
+        let donutChart, barChart;
+
+        const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        window.onload = () => { if(logoBase64) carregarLogo(logoBase64); };
+
+        function carregarLogo(b64) {
+            document.getElementById('img-logo-dash').src = b64;
+            document.getElementById('img-logo-dash').classList.remove('hidden');
+            document.getElementById('txt-logo-dash').classList.add('hidden');
+            document.getElementById('recibo-logo-img').src = b64;
+            document.getElementById('recibo-logo-img').classList.remove('hidden');
+        }
+
+        function uploadLogo(input) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                logoBase64 = reader.result;
+                localStorage.setItem('douglas_logo', logoBase64);
+                carregarLogo(logoBase64);
+            };
+            if(file) reader.readAsDataURL(file);
+        }
+
+        document.getElementById('login-form').onsubmit = (e) => {
+            e.preventDefault();
+            if(document.getElementById('pass').value === config.pass) {
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                atualizarTudo();
+            } else { alert("Senha incorreta!"); }
+        };
+
+        function calcularSaldoModal() {
+            const total = parseFloat(document.getElementById('valor-total').value) || 0;
+            const entrada = parseFloat(document.getElementById('valor-entrada').value) || 0;
+            const saldo = total - entrada;
+            document.getElementById('saldo-modal').value = fmt.format(saldo);
+        }
+
+        function abrirModal() { 
+            document.getElementById('modal-titulo').innerText = "Novo Cadastro";
+            document.getElementById('edit-id').value = "";
+            document.getElementById('form-cadastro').reset();
+            document.getElementById('saldo-modal').value = "R$ 0,00";
+            document.getElementById('modal').classList.remove('hidden'); 
+        }
+
+        function fecharModal() { document.getElementById('modal').classList.add('hidden'); }
+        function voltarDash() { document.getElementById('tela-recibo').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); }
+
+        document.getElementById('form-cadastro').onsubmit = function(e) {
+            e.preventDefault();
+            const idEdicao = document.getElementById('edit-id').value;
+            const valorTotalBase = parseFloat(document.getElementById('valor-total').value);
+            const [qtd, juros] = document.getElementById('parcelas').value.split('|').map(Number);
+            const valorComJuros = valorTotalBase * (1 + (juros/100));
+            const entrada = parseFloat(document.getElementById('valor-entrada').value);
+            
+            const dados = {
+                id: idEdicao ? parseInt(idEdicao) : Date.now(),
+                nome: document.getElementById('nome-cliente').value.toUpperCase(),
+                doc: document.getElementById('doc-cliente').value || "---",
+                item: document.getElementById('item-servico').value,
+                total: valorComJuros,
+                entrada: entrada,
+                saldo: valorComJuros - entrada,
+                data: idEdicao ? servicos.find(s => s.id == idEdicao).data : new Date().toLocaleDateString('pt-BR'),
+                vencimento: new Date(Date.now() + 2592000000).toLocaleDateString('pt-BR'),
+                pago: (valorComJuros - entrada <= 0)
+            };
+
+            if(idEdicao) {
+                const index = servicos.findIndex(s => s.id == idEdicao);
+                servicos[index] = dados;
+            } else {
+                servicos.unshift(dados);
+            }
+
+            localStorage.setItem('douglas_v2', JSON.stringify(servicos));
+            this.reset();
+            fecharModal();
+            atualizarTudo();
+            gerarRecibo(dados.id);
+        };
+
+        function editarServico(id) {
+            const s = servicos.find(x => x.id === id);
+            if(s) {
+                document.getElementById('modal-titulo').innerText = "Editar Registro";
+                document.getElementById('edit-id').value = s.id;
+                document.getElementById('nome-cliente').value = s.nome;
+                document.getElementById('doc-cliente').value = s.doc;
+                document.getElementById('item-servico').value = s.item;
+                document.getElementById('valor-total').value = s.total;
+                document.getElementById('valor-entrada').value = s.entrada;
+                calcularSaldoModal();
+                document.getElementById('modal').classList.remove('hidden');
+            }
+        }
+
+        function excluirServico(id) {
+            if(confirm("Deseja excluir este registro?")) {
+                servicos = servicos.filter(s => s.id !== id);
+                localStorage.setItem('douglas_v2', JSON.stringify(servicos));
+                atualizarTudo();
+            }
+        }
+
+        function limparTudo() {
+            if(confirm("ATENÇÃO: Isso apagará TODOS os registros permanentemente. Deseja continuar?")) {
+                servicos = [];
+                localStorage.setItem('douglas_v2', JSON.stringify(servicos));
+                atualizarTudo();
+            }
+        }
+
+        function atualizarTudo() {
+            renderLista(servicos);
+            const bruto = servicos.reduce((acc, s) => acc + s.total, 0);
+            const recebido = servicos.reduce((acc, s) => acc + s.entrada, 0);
+            const pendente = bruto - recebido;
+
+            document.getElementById('total-bruto').innerText = fmt.format(bruto);
+            document.getElementById('total-recebido').innerText = fmt.format(recebido);
+            document.getElementById('total-devedor').innerText = fmt.format(pendente);
+            document.getElementById('total-pendente').innerText = fmt.format(pendente);
+            
+            initCharts();
+        }
+
+        function renderLista(dados) {
+            document.getElementById('lista-servicos').innerHTML = dados.map(s => `
+                <div class="card flex flex-col md:flex-row items-center justify-between border-l-4 ${s.pago ? 'border-green-500' : 'border-red-500'} gap-4">
+                    <div class="flex-grow">
+                        <div class="flex items-center gap-2">
+                            <p class="font-bold italic text-white">${s.nome}</p>
+                            <span class="text-[9px] bg-gray-700 px-2 py-0.5 rounded text-gray-400">${s.data}</span>
+                        </div>
+                        <p class="text-[10px] text-gray-500 uppercase">${s.item}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="text-right mr-4">
+                            <p class="text-[10px] text-gray-500 uppercase">Saldo</p>
+                            <p class="font-bold ${s.pago ? 'text-green-500' : 'text-red-500'}">${fmt.format(s.saldo)}</p>
+                        </div>
+                        <button onclick="editarServico(${s.id})" class="bg-gray-600 p-2 rounded-lg text-[10px] font-black uppercase">Editar</button>
+                        <button onclick="gerarRecibo(${s.id})" class="bg-blue-600 p-2 rounded-lg text-[10px] font-black uppercase">Recibo</button>
+                        <button onclick="excluirServico(${s.id})" class="bg-red-900/40 p-2 rounded-lg text-[10px] font-black uppercase">Limpar</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function gerarRecibo(id) {
+            const s = servicos.find(x => x.id === id);
+            document.getElementById('conteudo-recibo').innerHTML = `
+                <div class="grid grid-cols-2 gap-4 border-b pb-4">
+                    <div><label class="text-[10px] font-bold text-gray-400 uppercase">Cliente</label><p class="font-black text-lg">${s.nome}</p></div>
+                    <div><label class="text-[10px] font-bold text-gray-400 uppercase">Documento</label><p class="font-bold">${s.doc}</p></div>
+                </div>
+                <div><label class="text-[10px] font-bold text-gray-400 uppercase">Descrição</label><p class="italic text-gray-700">${s.item}</p></div>
+                <div class="bg-blue-50 p-6 rounded-xl flex justify-between items-center">
+                    <div>
+                        <p class="text-xs uppercase">Total: ${fmt.format(s.total)}</p>
+                        <p class="text-xs text-green-600 uppercase font-bold">Pago: ${fmt.format(s.entrada)}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[10px] text-red-500 uppercase font-bold">Saldo Devedor</p>
+                        <p class="text-2xl font-black text-red-600">${fmt.format(s.saldo)}</p>
+                    </div>
+                </div>
+                <div class="text-[10px] text-gray-400 uppercase pt-4">Emitido em: ${s.data} | Vencimento: ${s.vencimento}</div>
+            `;
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('tela-recibo').classList.remove('hidden');
+        }
+
+        function initCharts() {
+            const r = servicos.reduce((acc, s) => acc + s.entrada, 0);
+            const p = servicos.reduce((acc, s) => acc + s.saldo, 0);
+            if(donutChart) donutChart.destroy();
+            donutChart = new Chart(document.getElementById('chartDonut'), {
+                type: 'doughnut',
+                data: { labels: ['Recebido', 'Pendente'], datasets: [{ data: [r, p], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }] },
+                options: { plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af'} } } }
+            });
+            if(barChart) barChart.destroy();
+            barChart = new Chart(document.getElementById('chartBar'), {
+                type: 'bar',
+                data: { labels: ['Histórico'], datasets: [{ label: 'Faturamento R$', data: [r], backgroundColor: '#3b82f6' }] },
+                options: { scales: { y: { beginAtZero: true, grid: { color: '#374151' } } } }
+            });
+        }
+
+        function filtrar() {
+            const t = document.getElementById('busca').value.toLowerCase();
+            renderLista(servicos.filter(s => s.nome.toLowerCase().includes(t)));
+        }
+    </script>
+</body>
+</html>
